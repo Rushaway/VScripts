@@ -1,11 +1,10 @@
 #pragma semicolon 1
 
 #define PLUGIN_AUTHOR "Cloud Strife"
-#define PLUGIN_VERSION "1.00"
+#define PLUGIN_VERSION "1.1"
 #define MAP_NAME "ze_Kitchen_v2s"
 
 #include <sourcemod>
-#include <sdktools>
 #include <vscripts/Fly>
 
 #pragma newdecls required
@@ -27,16 +26,8 @@ public Plugin myinfo =
 	url = "https://steamcommunity.com/id/cloudstrifeua/"
 };
 
-public void OnPluginStart()
-{
-	HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
-	HookEvent("round_end", OnRoundEnd, EventHookMode_PostNoCopy);
-}
-
-
 public void OnMapStart()
 {
-	
 	char sCurMap[256];
 	GetCurrentMap(sCurMap, sizeof(sCurMap));
 	bValidMap = (strcmp(sCurMap, MAP_NAME, false) == 0);
@@ -44,27 +35,44 @@ public void OnMapStart()
 	{
 		g_aFlySmall = new ArrayList();
 		g_iButton_players = new StringMap();
+		HookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
+		HookEvent("round_end", OnRoundEnd, EventHookMode_PostNoCopy);
 	}
 	
 }
 
+//Call Tick functions for all existing objects on each frame
+public void OnGameFrame()
+{
+	if(!bValidMap) return;
+	
+	if(g_Fly && g_Fly.started) g_Fly.Tick();
+	
+	if(g_FlyEnd && g_FlyEnd.started) g_FlyEnd.Tick();
+	
+	for(int i = 0; i < g_aFlySmall.Length; i++)
+	{
+		Fly_Small fly = view_as<Fly_Small>(g_aFlySmall.Get(i));
+		if(fly.started) fly.Tick();
+		else if(fly.dead)
+		{
+			delete fly;
+			g_aFlySmall.Erase(i);
+		}
+	}
+}
+
 public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	if(!bValidMap) 
-		return;
 	int tmp = GetEntityIndexByHammerID(1208341, "trigger_multiple");
-	
 	HookSingleEntityOutput(tmp, "OnUser1", OnFlyStart, true);
 	HookSingleEntityOutput(tmp, "OnUser2", OnAddFlyHP);
 	HookSingleEntityOutput(tmp, "OnStartTouch", OnFlyInit, true);
-	tmp = GetEntityIndexByHammerID(1564273, "prop_dynamic");
 	
+	tmp = GetEntityIndexByName("fly_end", "prop_dynamic");
 	HookSingleEntityOutput(tmp, "OnUser1", OnFlyEndInit, true);
-	tmp = GetEntityIndexByHammerID(1416995, "prop_dynamic");
 	
-	HookSingleEntityOutput(tmp, "OnUser1", OnFlyDeadTrigger, true);
-	tmp = GetEntityIndexByHammerID(1189814, "logic_relay");
-	
+	tmp = GetEntityIndexByName("stage3_konec_relay", "logic_relay");
 	HookSingleEntityOutput(tmp, "OnTrigger", OnMicrowaveInit, true);
 }
 
@@ -73,7 +81,6 @@ public void OnPlayerPickUp(const char[] output, int caller, int activator, float
 	char sButtonIndex[64];
 	Format(sButtonIndex, sizeof(sButtonIndex), "%d", caller);
 	g_iButton_players.SetValue(sButtonIndex, activator, true);
-	
 }
 
 public void OnButtonPressed(const char[] output, int caller, int activator, float delay)
@@ -86,12 +93,12 @@ public void OnButtonPressed(const char[] output, int caller, int activator, floa
 	{
 		EntFireByIndex(caller, "FireUser1", "", "0.00", -1);
 	}
-	
 }
 
 public void OnMicrowaveInit(const char[] output, int caller, int activator, float delay)
 {
-	int entity = GetEntityIndexByHammerID(1684029, "prop_dynamic");
+	int entity = GetEntityIndexByName("mikrovlnka_model", "prop_dynamic");
+	if(!IsValidEntity(entity)) return;
 	
 	g_Microwave = new Microwave(entity);
 	
@@ -104,18 +111,12 @@ public void OnMicrowaveInit(const char[] output, int caller, int activator, floa
 
 public void OnMicrowaveLaserHit2(const char[] output, int caller, int activator, float delay)
 {
-	if(g_Microwave)
-		g_Microwave.Hit(80);
-	
+	g_Microwave.Hit(80);
 }
 
 public void OnMicrowaveLaserHit1(const char[] output, int caller, int activator, float delay)
 {
-	if(g_Microwave)
-	{	
-		g_Microwave.Hit(70);
-		
-	}
+	g_Microwave.Hit(70);
 }
 
 public void OnMicrowaveStart(const char[] output, int caller, int activator, float delay)
@@ -126,36 +127,36 @@ public void OnMicrowaveStart(const char[] output, int caller, int activator, flo
 public Action Microwave_StartDelay(Handle timer)
 {
 	KillTimer(timer);
-	g_Microwave.Start();
+	if(g_Microwave) g_Microwave.Start();
 	return Plugin_Stop;
 }
 
 public void OnMicrowaveTakeDamage(const char[] output, int caller, int activator, float delay)
 {
-	if(g_Microwave)
-	{	
-		g_Microwave.Hit(1);
-	}
+	g_Microwave.Hit(1);
 }
 
 public void OnMicrowaveAddHP(const char[] output, int caller, int activator, float delay)
 {
 	g_Microwave.AddHealth(200);
-	
 }
 
 public void OnFlyDeadTrigger(const char[] output, int caller, int activator, float delay)
 {
+	if(!g_Fly) return;
+	
 	float orig[3], angles[3];
 	GetOrigin(g_Fly.entity, orig);
 	GetAngles(g_Fly.entity, angles);
 	SetOrigin(caller, orig);
 	SetAngles(caller, angles);
+	UnhookSingleEntityOutput(g_Fly.entity, "OnUser1", OnChangeEggsCount);
+	UnhookSingleEntityOutput(g_Fly.entity, "OnTakeDamage", OnFlyTakeDamage);
+	UnhookSingleEntityOutput(g_Fly.entity, "OnUser2", OnSetReturn);
 	g_Fly.KillFly();
 	g_Fly = null;
 	EntFireByIndex(caller, "SetAnimation", "dead", "0.0", -1);
 	EntFireByIndex(caller, "SetAnimation", "dead_loop", "2.0", -1);
-	
 }
 
 //public void OnFlyEndHovnoInit1(const char[] output, int caller, int activator, float delay)
@@ -197,47 +198,46 @@ public void OnFlyEndInit(const char[] output, int caller, int activator, float d
 {
 	g_FlyEnd = new Fly_End(caller);
 	g_FlyEnd.Start();
-	
 }
 
 public void OnFlyInit(const char[] output, int caller, int activator, float delay)
 {
-	int fly = GetEntityIndexByHammerID(1199348, "prop_dynamic");
+	int fly = GetEntityIndexByName("fly", "prop_dynamic");
+	if(!IsValidEntity(fly)) return;
 	
 	g_Fly = new Fly(fly);
 	
 	HookSingleEntityOutput(fly, "OnUser1", OnChangeEggsCount);
 	HookSingleEntityOutput(fly, "OnTakeDamage", OnFlyTakeDamage);
+	HookSingleEntityOutput(fly, "OnUser2", OnSetReturn);
+	
+	int tmp = GetEntityIndexByName("fly_dead", "prop_dynamic");
+	HookSingleEntityOutput(tmp, "OnUser1", OnFlyDeadTrigger, true);
 }
 
 public void OnFlyTakeDamage(const char[] output, int caller, int activator, float delay)
 {
-	if(g_Fly)
-	{	
-		g_Fly.Hit();
-		
-	}
+	g_Fly.Hit();	
+}
+
+public void OnSetReturn(const char[] output, int caller, int activator, float delay)
+{
+	g_Fly.SetReturn(true);
 }
 
 public void OnFlyStart(const char[] output, int caller, int activator, float delay)
 {
-	g_Fly.Start();
-	
+	if(g_Fly) g_Fly.Start();
 }
 
 public void OnAddFlyHP(const char[] output, int caller, int activator, float delay)
 {
-	g_Fly.AddHealth(415);
-	
+	if(g_Fly) g_Fly.AddHealth(415);
 }
 
 public void OnChangeEggsCount(const char[] output, int caller, int activator, float delay)
 {
-	if(g_Fly)
-	{	
-		g_Fly.IncrementEggCount(-1);
-		
-	}
+	g_Fly.IncrementEggCount(-1);
 }
 
 public void OnEntitySpawned(int entity, const char[] classname)
@@ -246,26 +246,18 @@ public void OnEntitySpawned(int entity, const char[] classname)
 		return;
 	if(IsValidEntity(entity))
 	{
+		char sName[MAX_ENT_NAME];
+	 	GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+	 	if(!sName[0])
+	 		return;
 		if(strcmp(classname, "prop_dynamic") == 0)
 		{
-			char sName[128];
-	 		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
-	 		if(!sName[0])
-	 			return;
 	 		if(StrContains(sName, "fly_small_model") != -1)
 	 		{
 	 			Fly_Small fly_small = new Fly_Small(entity);
 	 			g_aFlySmall.Push(fly_small);
-	 			if(StrContains(sName, "fly_small_model_map") != -1)
-	 			{	
-	 				
-	 				CreateTimer(5.0, StartDelay, fly_small);
-	 			}
-	 			else
-	 			{
-	 				
-	 				fly_small.Start();
-	 			}
+	 			if(StrContains(sName, "fly_small_model_map") != -1) CreateTimer(5.0, StartDelay, EntIndexToEntRef(entity));
+	 			else fly_small.Start();
 	 			HookSingleEntityOutput(entity, "OnUser1", OnFlySmallDie, true);
 	 		}
 	 		//else if(strcmp(sName, "1_fly_hovno") == 0)
@@ -296,10 +288,6 @@ public void OnEntitySpawned(int entity, const char[] classname)
 	 	}
 	 	else if(strcmp(classname, "func_button") == 0)
 	 	{
-	 		char sName[128];
-	 		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
-	 		if(!sName[0])
-	 			return;
 	 		if(StrContains(sName, "george_cades_syr_button") != -1)
 	 		{
 	 			
@@ -334,13 +322,21 @@ public void OnEntitySpawned(int entity, const char[] classname)
 	}
 }
 
-public Action StartDelay(Handle timer, Fly_Small fly)
+public Action StartDelay(Handle timer, int entity)
 {
 	KillTimer(timer);
-	if(fly)
+	entity = EntRefToEntIndex(entity);
+	if(IsValidEntity(entity))
 	{
-		
-		fly.Start();
+		for(int i = 0; i < g_aFlySmall.Length; i++)
+		{
+			Fly_Small fly = view_as<Fly_Small>(g_aFlySmall.Get(i));
+			if(fly.entity == entity)
+			{
+				fly.Start();
+				break;
+			}
+		}
 	}
 	return Plugin_Stop;
 }
@@ -352,9 +348,8 @@ public void OnFlySmallDie(const char[] output, int caller, int activator, float 
 		Fly_Small fly = view_as<Fly_Small>(g_aFlySmall.Get(i));
 		if(fly.entity == caller)
 		{
-			
 			fly.Die();
-			g_aFlySmall.Erase(i);
+			break;
 		}
 	}
 }
@@ -367,7 +362,7 @@ public void OnEntityDestroyed(int entity)
 	GetEntityClassname(entity, sClassname, sizeof(sClassname));
 	if(strcmp(sClassname, "prop_dynamic") == 0)
 	{
-		char sName[128];
+		char sName[MAX_ENT_NAME];
 	 	GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
 	 	if(!sName[0])
 	 		return;
@@ -378,19 +373,22 @@ public void OnEntityDestroyed(int entity)
 				Fly_Small fly = view_as<Fly_Small>(g_aFlySmall.Get(i));
 				if(fly.entity == entity)
 				{
-					
-					fly.doNextTick = false;
+					delete fly;
 					g_aFlySmall.Erase(i);
+					break;
 				}
 			}
 	 	}
-	 	else if(strcmp(sName, "mikrovlnka_model") == 0)
+	 	else if(g_Microwave && g_Microwave.entity == entity) delete g_Microwave;
+	 	else if(g_Fly && g_Fly.entity == entity)
+		{
+			g_Fly.KillFly();
+			g_Fly = null;
+		}
+	 	else if(g_FlyEnd && g_FlyEnd.entity == entity)
 	 	{
-	 		if(g_Microwave)
-	 		{
-	 			
-	 			delete g_Microwave;
-	 		}
+	 		g_FlyEnd.KillFly();
+	 		g_FlyEnd = null;
 	 	}
 	}
 }
@@ -405,12 +403,12 @@ public void Cleanup()
 		
 	if(g_Fly)
 	{
-		g_Fly.doNextTick = false;
+		g_Fly.KillFly();
 		g_Fly = null;
 	}
 	if(g_FlyEnd)
 	{
-		g_FlyEnd.doNextTick = false;
+		g_FlyEnd.KillFly();
 		g_FlyEnd = null;
 	}
 	//for (int i = 0; i < 5; i++)
@@ -424,7 +422,7 @@ public void Cleanup()
 	for (int i = 0; i < g_aFlySmall.Length; i++)
 	{
 		Fly_Small fly = view_as<Fly_Small>(g_aFlySmall.Get(i));
-		fly.doNextTick = false;
+		delete fly;
 		g_aFlySmall.Erase(i);
 	}
 	g_iButton_players.Clear();

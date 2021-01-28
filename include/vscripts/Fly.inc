@@ -10,15 +10,6 @@
 #include <adt_array>
 #include <float>
 
-enum Fly_Type
-{
-	eFlyBase = 0,
-	eFlySmall = 1,
-	eFly = 2,
-	eFlyEnd = 3,
-	eFlyEndHovno = 4
-};
-
 float TOASTER_POSITION[] =  { 7063.0, 2329.0, -360.0 };
 
 const int t_len = 6;
@@ -53,7 +44,7 @@ float TARGET_NODES[][] = {
 
 public bool IsValidPlayer(int player)
 {
-	return player >= 1 && player <= 64 && IsValidEntity(player) && IsPlayerAlive(player);
+	return player >= 1 && player <= MAXPLAYERS && IsValidEntity(player) && IsPlayerAlive(player);
 }
 
 methodmap Fly_base < Basic
@@ -62,44 +53,31 @@ methodmap Fly_base < Basic
 	{
 		Basic myclass = new Basic();
 		myclass.SetInt("iEntity", entity);
-		myclass.SetFloat("fSpeed", 25.0);
-		myclass.SetFloat("fRotation_speed", 0.05);
+		myclass.SetFloat("fSpeed", 5.0);
+		myclass.SetFloat("fRotation_speed", 0.01);
 		myclass.SetFloat("fPrevious_distance_to_target", -1.0);
 		myclass.SetFloat("fCurrent_distance_to_target", -1.0);
 		myclass.SetFloat("fBlocker1", 0.0);
 		myclass.SetFloat("fBlocker2", 100.0);
-		myclass.SetFloat("fRot_speed_min", 0.05);
-		myclass.SetFloat("fRot_speed_max", 0.2);
-		myclass.SetFloat("fRot_speed_acceleration", 0.0005);
-		myclass.SetFloat("fRot_err", 0.15);
-		myclass.SetFloat("fSpeed_acceleration", 0.3);
-		myclass.SetFloat("fMax_speed", 50.0);
-		myclass.SetInt("iType", view_as<int>(eFlyBase));
-		myclass.SetBool("bDoNextTick", true);
+		myclass.SetFloat("fRot_speed_min", 0.01);
+		myclass.SetFloat("fRot_speed_max", 0.04);
+		myclass.SetFloat("fRot_speed_acceleration", 0.0001);
+		myclass.SetFloat("fRot_err", 0.03);
+		myclass.SetFloat("fSpeed_acceleration", 0.06);
+		myclass.SetFloat("fMax_speed", 10.0);
+		myclass.SetBool("bStarted", false);
 		return view_as<Fly_base>(myclass);
 	}
 	
-	property bool doNextTick
+	property bool started
 	{
 		public get()
 		{
-			return this.GetBool("bDoNextTick");
+			return this.GetBool("bStarted");
 		}
 		public set(bool val)
 		{
-			this.SetBool("bDoNextTick", val);
-		}
-	}
-	
-	property Fly_Type type
-	{
-		public get()
-		{
-			return view_as<Fly_Type>(this.GetInt("iType"));
-		}
-		public set(Fly_Type val)
-		{
-			this.SetInt("iType", view_as<int>(val));
+			this.SetBool("bStarted", val);
 		}
 	}
 	
@@ -277,7 +255,6 @@ methodmap Fly_Small < Fly_base
 		myclass.SetBool("bDead", false);
 		myclass.SetInt("iRetarget", 10);
 		myclass.SetInt("iTarget", -1);
-		myclass.type = eFlySmall;
 		return view_as<Fly_Small>(myclass);
 	}
 	
@@ -329,7 +306,7 @@ methodmap Fly_Small < Fly_base
 		orig[2] += 40.0;
 		SetOrigin(this.entity, orig);
 		
-		CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
+		this.started = true;
 	}
 	
 	public void Tick()
@@ -348,7 +325,7 @@ methodmap Fly_Small < Fly_base
 				EntFireByIndex(this.entity, "SetAnimation", "dead", "0.0", -1);
 				EntFireByIndex(this.entity, "SetAnimation", "dead_loop", "2.0", -1);
 				EntFireByIndex(this.entity, "kill", "", "20.0", -1);
-				delete this;
+				this.started = false;
 				return;
 			}
 			else
@@ -376,11 +353,9 @@ methodmap Fly_Small < Fly_base
 				MoveDir(this, {0.0, 0.0, 1.0});
 			}
 		}
-		CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	public void Die()
 	{
-		
 		this.dead = true;
 		this.speed = 0.0;
 	}
@@ -391,16 +366,14 @@ methodmap Fly < Fly_Small
 	public Fly(int entity)
 	{
 		Fly_Small myclass = new Fly_Small(entity);
-		myclass.type = eFly;
-		myclass.speed = 35.0;
+		myclass.speed = 7.0;
 		myclass.retarget = 8;
-		myclass.blocker1 = 50.0;
-		myclass.blocker2 = 160.0;
-		myclass.rot_speed_min = 0.025;
-		myclass.rot_speed_max = 0.1;
-		myclass.speed_acceleration = 0.25;
-		myclass.max_speed = 85.0;
-		myclass.SetBool("bStarted", false);
+		myclass.blocker1 = 60.0;
+		myclass.blocker2 = 170.0;
+		myclass.rot_speed_min = 0.005;
+		myclass.rot_speed_max = 0.02;
+		myclass.speed_acceleration = 0.05;
+		myclass.max_speed = 15.0;
 		myclass.SetBool("bGrabbed_player", false);
 		myclass.SetBool("bReturn_to_toaster", false);
 		myclass.SetBool("bSpawn_eggs", false);
@@ -412,18 +385,7 @@ methodmap Fly < Fly_Small
 		myclass.SetHandle("lGrabbed_players_dead", new ArrayList());
 		return view_as<Fly>(myclass);
 	}
-	
-	property bool started
-	{
-		public get()
-		{
-			return this.GetBool("bStarted");
-		}
-		public set(bool val)
-		{
-			this.SetBool("bStarted", val);
-		}
-	}
+
 	property bool grabbed_player
 	{
 		public get()
@@ -546,7 +508,6 @@ methodmap Fly < Fly_Small
 		this.max_spawned_eggs = this.players_in_arena / 6;
 		this.started = true;
 		EntFireByIndex(this.entity, "SetAnimation", "fly", "0.00", -1);
-		CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	
 	public void KillFly()
@@ -587,7 +548,7 @@ methodmap Fly < Fly_Small
 					if ((this.target = GetNewTarget(this)) == -1 || !this.IsValidTarget())
 						this.return_to_toaster = true;
 					else if (!this.grabbed_player)
-						CreateTimer(15.0, SetReturn_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
+						EntFireByIndex(this.entity, "FireUser2", "", "15.0", -1);
 					if (playerNear == this.target)
 						this.target = -1;
 		
@@ -677,7 +638,6 @@ methodmap Fly < Fly_Small
 			if (this.target == -1 && TraceLine(flyPos, flyPos_copy, this.entity) >= 1.0)
 				MoveDir(this, { 0.0, 0.0, 1.0 } );
 		}
-		CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	
 	public void SetReturn(bool state)
@@ -722,29 +682,21 @@ methodmap Fly < Fly_Small
 	}
 }
 
-public Action SetReturn_Cb(Handle timer, Fly fly)
-{
-	KillTimer(timer);
-	fly.SetReturn(true);
-	return Plugin_Stop;
-}
-
 methodmap Fly_End < Fly_base 
 {
 	public Fly_End(int entity)
 	{
 		Fly_base myclass = new Fly_base(entity);
-		myclass.type = eFlyEnd;
 		myclass.blocker1 = 60.0;
 		myclass.blocker2 = 60.0;
-		myclass.rot_speed_max = 0.4;
-		myclass.rot_speed_min = 0.1;
-		myclass.speed_acceleration = 0.25;
-		myclass.max_speed = 85.0;
+		myclass.rot_speed_max = 0.02;
+		myclass.rot_speed_min = 0.005;
+		myclass.speed_acceleration = 0.05;
+		myclass.max_speed = 15.0;
 		myclass.SetBool("bEnd", false);
 		myclass.SetInt("iCurrent_node", 0);
 		myclass.SetHandle("lGrabbed_players", new ArrayList());
-		myclass.speed = 35.0;
+		myclass.speed = 7.0;
 		return view_as<Fly_End>(myclass);
 	}
 	property bool end 
@@ -801,7 +753,7 @@ methodmap Fly_End < Fly_base
 	public void Start()
 	{
 		EntFireByIndex(this.entity, "SetAnimation", "fly", "0.00", -1);
-		CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
+		this.started = true;
 	}
 	public void Tick()
 	{
@@ -880,6 +832,7 @@ methodmap Fly_End < Fly_base
 				angles[2] = 0.0;
 				SetForwardVector(this.entity, angles);
 				this.end = true;
+				this.started = false;
 				return;
 			}
 			
@@ -890,11 +843,7 @@ methodmap Fly_End < Fly_base
 			this.MoveTowardsTarget(flyPos, targetNode);
 			this.previous_distance_to_target = this.current_distance_to_target;
 		}
-		
-		if (!this.end)
-			CreateTimer(0.0, Tick_Cb, this, TIMER_FLAG_NO_MAPCHANGE);
 	}
-	
 }
 
 //methodmap Fly_End_Hovno < Fly_End
@@ -995,7 +944,6 @@ methodmap Fly_End < Fly_base
 
 public void ChasePlayer(Fly_Small fly, const float[3] flyPos)
 {
-	
 	fly.retarget -= 0.01;
 	float targetPos[3];
 	GetOrigin(fly.target, targetPos);
@@ -1023,7 +971,6 @@ public bool IsTargetInSight(int entity, const float[3] flyPos, const float[3] ta
 
 public int GetNewTarget(Fly_Small fly)
 {
-	
 	if(!IsValidPlayer(fly.target))
 	{
 		fly.target = -1;
@@ -1062,9 +1009,6 @@ public int GetNewTarget(Fly_Small fly)
 
 public void MoveForward(Fly_base fly, float blocker1, float blocker2)
 {
-	if(!IsValidEntity(fly.entity))
-		return;
-	
 	float pos1[3], pos2[3], selfPos[3], selfFwd[3];
 	GetOrigin(fly.entity, selfPos);
 	GetForwardVector(fly.entity, selfFwd);
@@ -1087,14 +1031,10 @@ public void MoveForward(Fly_base fly, float blocker1, float blocker2)
 		AddVectors(selfPos, selfFwd, newpos);
 		SetOrigin(fly.entity, newpos);
 	}
-	
 }
 
 public void MoveDir(Fly_base fly, float[3] dir)
 {
-	if(!IsValidEntity(fly.entity))
-		return;
-	
 	if(fly.speed < fly.max_speed) fly.speed += fly.speed_acceleration;
 	float currentAngle[3], origin[3], newpos[3], dir_copy[3];
 	dir_copy[0] = dir[0];
@@ -1107,14 +1047,10 @@ public void MoveDir(Fly_base fly, float[3] dir)
 	ScaleVector(dir_copy, fly.speed / 4.0);
 	AddVectors(origin, dir_copy, newpos);
 	SetOrigin(fly.entity, newpos);
-	
 }
 
 public void GetNewDir(Fly_base fly, const float[3] targetDir, const float[3] currentDir, float[3] newDir)
 {
-	if(!IsValidEntity(fly.entity))
-		return;
-	
 	float rotDir = currentDir[0] * targetDir[1] - currentDir[1] * targetDir[0];
 	if (FloatAbs(rotDir) > 0.3)
 	{
@@ -1259,72 +1195,4 @@ methodmap Microwave < Basic
 			this.dead = true;
 		}
 	}
-}
-
-public Action Tick_Cb(Handle timer, Fly_base fly_base)
-{
-	KillTimer(timer);
-	if(fly_base)
-	{
-		switch(fly_base.type)
-		{
-			case eFlySmall:
-			{
-				Fly_Small fly = view_as<Fly_Small>(fly_base);
-				if(fly.doNextTick)
-				{
-					
-					fly.Tick();
-				}
-				else 
-				{
-					
-					delete fly;
-				}
-			}
-			case eFly:
-			{
-				Fly fly = view_as<Fly>(fly_base);
-				if(fly.doNextTick)
-				{
-					
-					fly.Tick();
-				}
-				else
-				{
-					
-					fly.KillFly();
-				}
-			}
-			case eFlyEnd:
-			{
-				Fly_End fly = view_as<Fly_End>(fly_base);
-				if(fly.doNextTick)
-				{
-					
-					fly.Tick();
-				}
-				else
-				{
-					
-					fly.KillFly();
-				}
-			}
-			//case eFlyEndHovno:
-			//{
-				//Fly_End_Hovno fly = view_as<Fly_End_Hovno>(fly_base);
-				//if(fly.doNextTick)
-				//{
-					//
-					//fly.Tick();
-				//}
-				//else
-				//{
-					//
-					//delete fly;
-				//}
-			//}
-		}
-	}
-	return Plugin_Stop;
 }
