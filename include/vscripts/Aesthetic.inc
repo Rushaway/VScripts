@@ -206,9 +206,10 @@ const float DEFAULT_MAX_ACC = 0.1;
 const float DEFAULT_RANGE = 100000.0;
 const float DEFAULT_PER_FRAME_MAX_VEL_DELTA = 0.0003333; // 2.0 / (120.0 * 50.0);
 const float DEFAULT_PER_FRAME_MAX_ACC_DELTA = 0.0000125; // 0.075 / (120.0 * 50.0);
+float VECTOR_ZERO[3] = {0.0,0.0,0.0};
 #define PI 3.14159
 
-public bool SphereCollideWithWorld(const float[3] orig, const float radius, float degree, float[3] buffer, int entity)
+public bool SphereCollideWithWorld(const float orig[3], const float radius, float degree, float buffer[3], int entity)
 {
 	float inc = PI / degree;
 	float  phiStop = PI - inc;
@@ -259,8 +260,8 @@ methodmap Eye < Basic
 		myclass.SetInt("iRetargetTicks", 0);
 		myclass.SetFloat("fMaxVel", DEFAULT_MAX_VEL);
 		myclass.SetFloat("fMaxAcc", DEFAULT_MAX_ACC);
-		myclass.SetVector("vVec", { 0.0, 0.0, 0.0 } );
-		myclass.SetVector("vAcc", { 0.0, 0.0, 0.0 } );
+		myclass.SetVector("vVec", VECTOR_ZERO );
+		myclass.SetVector("vAcc", VECTOR_ZERO );
 		myclass.SetFloat("fSavedVel", 0.0);
 		myclass.SetFloat("fSavedAcc", 0.0);
 		return view_as<Eye>(myclass);
@@ -370,22 +371,22 @@ methodmap Eye < Basic
 		}
 	}
 	
-	public void GetVel(float[3] vel)
+	public void GetVel(float vel[3])
 	{
 		this.GetVector("vVel", vel);
 	}
 	
-	public void SetVel(const float[3] vel)
+	public void SetVel(const float vel[3])
 	{
 		this.SetVector("vVel", vel);
 	}
 	
-	public void GetAcc(float[3] acc)
+	public void GetAcc(float acc[3])
 	{
 		this.GetVector("vAcc", acc);
 	}
 	
-	public void SetAcc(const float[3] acc)
+	public void SetAcc(const float acc[3])
 	{
 		this.SetVector("vAcc", acc);
 	}
@@ -522,7 +523,7 @@ methodmap Eye < Basic
     		ScaleVector(tmp, this.maxVel / length);
     		this.SetVel(tmp);
     	}
-    	this.SetAcc( { 0.0, 0.0, 0.0 } );
+    	this.SetAcc( VECTOR_ZERO );
 	
     	// Apply the higher accuracy movement deltas
     	this.maxVel += DEFAULT_PER_FRAME_MAX_VEL_DELTA;
