@@ -1,10 +1,13 @@
 #pragma semicolon 1
 
-#define PLUGIN_AUTHOR "Cloud Strife"
-#define PLUGIN_VERSION "1.2"
+#define PLUGIN_AUTHOR "Cloud Strife, .Rushaway, maxime1907"
+#define PLUGIN_VERSION "2.0"
 #define MAP_NAME "ze_Kitchen_v2s"
 
+#include <sdktools>
+#include <sdkhooks>
 #include <sourcemod>
+#include <multicolors>
 #include <vscripts/Fly>
 
 #pragma newdecls required
@@ -79,6 +82,14 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	
 	tmp = Vscripts_GetEntityIndexByName("stage3_konec_relay", "logic_relay");
 	HookSingleEntityOutput(tmp, "OnTrigger", OnMicrowaveInit, true);
+
+	CreateTimer(12.0, Credits, INVALID_HANDLE, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public Action Credits(Handle timer)
+{
+	CPrintToChatAll("{pink}[VScripts] {white}Map using VScripts ported by Cloud Strife.");
+	return Plugin_Continue;
 }
 
 public void OnPlayerPickUp(const char[] output, int caller, int activator, float delay)
@@ -252,85 +263,114 @@ public void OnChangeEggsCount(const char[] output, int caller, int activator, fl
 		g_Fly.IncrementEggCount(-1);
 }
 
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if (!bValidMap)
+		return;
+
+	if (!CanTestFeatures() || GetFeatureStatus(FeatureType_Native, "SDKHook_OnEntitySpawned") != FeatureStatus_Available)
+		SDKHook(entity, SDKHook_SpawnPost, OnEntitySpawnedPost);
+}
+
+public void OnEntitySpawnedPost(int entity)
+{
+	if (!IsValidEntity(entity))
+		return;
+
+	// 1 frame later required to get some properties
+	RequestFrame(ProcessEntitySpawned, entity);
+}
+
 public void OnEntitySpawned(int entity, const char[] classname)
 {
-	if(!bValidMap)
+	ProcessEntitySpawned(entity);
+}
+
+stock void ProcessEntitySpawned(int entity)
+{
+	if (!bValidMap || !IsValidEntity(entity))
 		return;
-	if(IsValidEntity(entity))
+
+	char classname[64];
+	GetEntityClassname(entity, classname, sizeof(classname));
+
+	if(strcmp(classname, "prop_dynamic") == 0)
 	{
-		char sName[MAX_ENT_NAME];
-	 	GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
-	 	if(!sName[0])
-	 		return;
-		if(strcmp(classname, "prop_dynamic") == 0)
+		char sName[128];
+		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+		if(!sName[0])
+			return;
+		if(StrContains(sName, "fly_small_model") != -1)
 		{
-	 		if(StrContains(sName, "fly_small_model") != -1)
-	 		{
-	 			Fly_Small fly_small = new Fly_Small(entity);
-	 			g_aFlySmall.Push(fly_small);
-	 			if(StrContains(sName, "fly_small_model_map") != -1) CreateTimer(5.0, StartDelay, EntIndexToEntRef(entity));
-	 			else fly_small.Start();
-	 			HookSingleEntityOutput(entity, "OnUser1", OnFlySmallDie, true);
-	 		}
-	 		//else if(strcmp(sName, "1_fly_hovno") == 0)
-	 		//{
-	 			//
-				//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit1, true);
-	 		//}
-	 		//else if(strcmp(sName, "2_fly_hovno") == 0)
-	 		//{
-	 			//
-				//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit2, true);
-	 		//}
-	 		//else if(strcmp(sName, "3_fly_hovno") == 0)
-	 		//{
-	 			//
-				//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit3, true);
-	 		//}
-	 		//else if(strcmp(sName, "4_fly_hovno") == 0)
-	 		//{
-	 			//
-				//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit4, true);
-	 		//}
-	 		//else if(strcmp(sName, "5_fly_hovno") == 0)
-	 		//{
-	 			//
-				//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit5, true);
-	 		//}
-	 	}
-	 	else if(strcmp(classname, "func_button") == 0)
-	 	{
-	 		if(StrContains(sName, "george_cades_syr_button") != -1)
-	 		{
-	 			
-				HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
-				HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
-	 		}
-	 		else if(StrContains(sName, "george_cades_toast_button") != -1)
-	 		{
-	 			
-				HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
-				HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
-	 		}
-	 		else if(StrContains(sName, "george_cades_sunka_button") != -1)
-	 		{
-	 			
-				HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
-				HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
-	 		}
-	 		else if(StrContains(sName, "george_cades_korenka_button") != -1)
-	 		{
-	 			
-				HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
-				HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
-	 		}
-	 		else if(StrContains(sName, "george_cades_houba_button") != -1)
-	 		{
-	 			
-				HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
-				HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
-	 		}
-	 	}
+			Fly_Small fly_small = new Fly_Small(entity);
+			g_aFlySmall.Push(fly_small);
+			if(StrContains(sName, "fly_small_model_map") != -1)
+			{
+				CreateTimer(5.0, StartDelay, fly_small);
+			}
+			else
+			{
+				fly_small.Start();
+			}
+			HookSingleEntityOutput(entity, "OnUser1", OnFlySmallDie, true);
+		}
+		//else if(strcmp(sName, "1_fly_hovno") == 0)
+		//{
+			//
+			//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit1, true);
+		//}
+		//else if(strcmp(sName, "2_fly_hovno") == 0)
+		//{
+			//
+			//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit2, true);
+		//}
+		//else if(strcmp(sName, "3_fly_hovno") == 0)
+		//{
+			//
+			//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit3, true);
+		//}
+		//else if(strcmp(sName, "4_fly_hovno") == 0)
+		//{
+			//
+			//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit4, true);
+		//}
+		//else if(strcmp(sName, "5_fly_hovno") == 0)
+		//{
+			//
+			//HookSingleEntityOutput(entity, "OnUser1", OnFlyEndHovnoInit5, true);
+		//}
+	}
+	else if(strcmp(classname, "func_button") == 0)
+	{
+		char sName[128];
+		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+		if(!sName[0])
+			return;
+		if(StrContains(sName, "george_cades_syr_button") != -1)
+		{
+			HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
+			HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
+		}
+		else if(StrContains(sName, "george_cades_toast_button") != -1)
+		{
+			HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
+			HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
+		}
+		else if(StrContains(sName, "george_cades_sunka_button") != -1)
+		{
+			HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
+			HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
+		}
+		else if(StrContains(sName, "george_cades_korenka_button") != -1)
+		{
+			HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
+			HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
+		}
+		else if(StrContains(sName, "george_cades_houba_button") != -1)
+		{
+			HookSingleEntityOutput(entity, "OnUser2", OnPlayerPickUp);
+			HookSingleEntityOutput(entity, "OnPressed", OnButtonPressed);
+		}
 	}
 }
 
@@ -368,13 +408,20 @@ public void OnFlySmallDie(const char[] output, int caller, int activator, float 
 
 public void OnEntityDestroyed(int entity)
 {
-	if(!IsValidEntity(entity) || !bValidMap)
+	if(!bValidMap)
 		return;
+
+	if (!CanTestFeatures() || GetFeatureStatus(FeatureType_Native, "SDKHook_OnEntitySpawned") != FeatureStatus_Available)
+		SDKUnhook(entity, SDKHook_SpawnPost, OnEntitySpawnedPost);
+
+	if(!IsValidEntity(entity))
+		return;
+
 	char sClassname[64];
 	GetEntityClassname(entity, sClassname, sizeof(sClassname));
 	if(strcmp(sClassname, "prop_dynamic") == 0)
 	{
-		char sName[MAX_ENT_NAME];
+		char sName[128];
 	 	GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
 	 	if(!sName[0])
 	 		return;
@@ -391,16 +438,12 @@ public void OnEntityDestroyed(int entity)
 				}
 			}
 	 	}
-	 	else if(g_Microwave && g_Microwave.entity == entity) delete g_Microwave;
-	 	else if(g_Fly && g_Fly.entity == entity)
-		{
-			g_Fly.KillFly();
-			g_Fly = null;
-		}
-	 	else if(g_FlyEnd && g_FlyEnd.entity == entity)
+	 	else if(strcmp(sName, "mikrovlnka_model") == 0)
 	 	{
-	 		g_FlyEnd.KillFly();
-	 		g_FlyEnd = null;
+	 		if(g_Microwave)
+	 		{
+	 			delete g_Microwave;
+	 		}
 	 	}
 	}
 }
@@ -452,6 +495,8 @@ public void OnMapEnd()
 	{
 		delete g_aFlySmall;
 		delete g_iButton_players;
+		UnhookEvent("round_start", OnRoundStart, EventHookMode_PostNoCopy);
+		UnhookEvent("round_end", OnRoundEnd, EventHookMode_PostNoCopy);
 	}
 	bValidMap = false;
 }

@@ -2,12 +2,14 @@
 
 #define DEBUG
 
-#define PLUGIN_AUTHOR "Cloud Strife"
-#define PLUGIN_VERSION "1.00"
+#define PLUGIN_AUTHOR "Cloud Strife, .Rushaway, maxime1907"
+#define PLUGIN_VERSION "2.0"
 #define MAP_NAME "ze_a_e_s_t_h_e_t_i_c_v1_1s"
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
+#include <multicolors>
 #include <vscripts/Aesthetic>
 
 #pragma newdecls required
@@ -112,6 +114,8 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	tmp = Vscripts_GetEntityIndexByHammerID(445713, "trigger_push");
 	
 	HookSingleEntityOutput(tmp, "OnStartTouch", OnPushTrigger2);
+
+	CreateTimer(12.0, Credits, INVALID_HANDLE, TIMER_FLAG_NO_MAPCHANGE);
 }
 
 public void OnPushTrigger2(const char[] output, int caller, int activator, float delay)
@@ -281,28 +285,51 @@ public void OnPurpleEndPass(const char[] output, int caller, int activator, floa
 	}
 }
 
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if (!bValidMap)
+		return;
+
+	if (!CanTestFeatures() || GetFeatureStatus(FeatureType_Native, "SDKHook_OnEntitySpawned") != FeatureStatus_Available)
+		SDKHook(entity, SDKHook_SpawnPost, OnEntitySpawnedPost);
+}
+
+public void OnEntitySpawnedPost(int entity)
+{
+	if (!IsValidEntity(entity))
+		return;
+
+	// 1 frame later required to get some properties
+	RequestFrame(ProcessEntitySpawned, entity);
+}
+
 public void OnEntitySpawned(int entity, const char[] classname)
 {
-	if(!bValidMap)
+	ProcessEntitySpawned(entity);
+}
+
+stock void ProcessEntitySpawned(int entity)
+{
+	if (!bValidMap || !IsValidEntity(entity))
 		return;
-	if(IsValidEntity(entity))
+
+	char classname[64];
+	GetEntityClassname(entity, classname, sizeof(classname));
+
+	if(strcmp(classname, "func_breakable") == 0)
 	{
-		if(strcmp(classname, "func_breakable") == 0)
-		{
-			char sName[128];
-			GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
-			if(!sName[0])
-				return;
-			int pos = FindCharInString(sName, '&', true);
-			if(pos != -1)
-			{	sName[pos] = 0;
-				if(strcmp(sName, "EyeBoss") == 0)
-				{
-					
-					Eye eye = new Eye(entity);
-					HookSingleEntityOutput(entity, "OnUser2", OnEyeMove);
-					g_aEyes.Push(eye);
-				}
+		char sName[128];
+		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+		if(!sName[0])
+			return;
+		int pos = FindCharInString(sName, '&', true);
+		if(pos != -1)
+		{	sName[pos] = 0;
+			if(strcmp(sName, "EyeBoss") == 0)
+			{
+				Eye eye = new Eye(entity);
+				HookSingleEntityOutput(entity, "OnUser2", OnEyeMove);
+				g_aEyes.Push(eye);
 			}
 		}
 	}
@@ -324,26 +351,30 @@ public void OnEntityDestroyed(int entity)
 {
 	if(!bValidMap)
 		return;
-	if(IsValidEntity(entity))
+
+	if (!CanTestFeatures() || GetFeatureStatus(FeatureType_Native, "SDKHook_OnEntitySpawned") != FeatureStatus_Available)
+		SDKUnhook(entity, SDKHook_SpawnPost, OnEntitySpawnedPost);
+
+	if(!IsValidEntity(entity))
+		return;
+
+	char sClassname[64];
+	GetEntityClassname(entity, sClassname, sizeof(sClassname));
+	if(strcmp(sClassname, "func_breakable") == 0)
 	{
-		char sClassname[64];
-		GetEntityClassname(entity, sClassname, sizeof(sClassname));
-		if(strcmp(sClassname, "func_breakable") == 0)
+		char sName[128];
+		GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+		if(!sName[0])
+			return;
+		if(StrContains(sName, "EyeBoss") != -1)
 		{
-			char sName[128];
-			GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
-			if(!sName[0])
-				return;
-			if(StrContains(sName, "EyeBoss") != -1)
+			for (int i = 0; i < g_aEyes.Length; i++)
 			{
-				for (int i = 0; i < g_aEyes.Length; i++)
+				Eye tmp = view_as<Eye>(g_aEyes.Get(i));
+				if(entity == tmp.entity)
 				{
-					Eye tmp = view_as<Eye>(g_aEyes.Get(i));
-					if(entity == tmp.entity)
-					{
-						delete tmp;
-						g_aEyes.Erase(i);
-					}
+					delete tmp;
+					g_aEyes.Erase(i);
 				}
 			}
 		}
@@ -378,4 +409,10 @@ public void OnMapEnd()
 		UnhookEvent("round_end", OnRoundEnd, EventHookMode_PostNoCopy);
 	}
 	bValidMap = false;
+}
+
+public Action Credits(Handle timer)
+{
+	CPrintToChatAll("{pink}[VScripts] {white}Map using VScripts ported by Cloud Strife.");
+	return Plugin_Continue;
 }
